@@ -91,26 +91,6 @@ get_latest_unity_version() {
     echo "$unity_version"
 }
 
-# Function to check if Unity CI images are available
-check_unity_ci_availability() {
-    local unity_version=$1
-    
-    log_info "Checking Unity CI image availability for $unity_version..."
-    
-    local docker_response=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${unity_version}")
-    local count=$(echo "$docker_response" | jq -r '.count // 0' 2>/dev/null || echo "0")
-    
-    if [[ $count -eq 0 ]]; then
-        log_error "Unity version $unity_version not found in unity-ci Docker Hub repository"
-        log_info "Check: https://hub.docker.com/r/unityci/editor/tags?name=${unity_version}"
-        log_info "Docker Hub API response: $(echo "$docker_response" | head -200)"
-        return 1
-    fi
-    
-    log_success "Found $count Unity CI images for version $unity_version"
-    return 0
-}
-
 # Function to get changeset for Unity version
 get_changeset() {
     local version=$1
@@ -231,13 +211,6 @@ main() {
             local version=$(get_latest_unity_version $major_version)
             if [[ $? -eq 0 ]]; then
                 log_success "Latest Unity $major_version version: $version"
-                if check_unity_ci_availability "$version"; then
-                    local changeset=$(get_changeset "$version")
-                    echo
-                    echo "Version: $version"
-                    echo "Changeset: $changeset"
-                    echo "Unity CI Available: Yes"
-                fi
             fi
             ;;
         "check")
@@ -245,14 +218,6 @@ main() {
             if [[ -z "$version" ]]; then
                 log_error "Please specify a Unity version to check"
                 exit 1
-            fi
-            
-            if check_unity_ci_availability "$version"; then
-                local changeset=$(get_changeset "$version")
-                echo
-                echo "Version: $version"
-                echo "Changeset: $changeset"
-                echo "Unity CI Available: Yes"
             fi
             ;;
         "versions")
@@ -276,11 +241,7 @@ main() {
             fi
             
             log_info "Unity version: $unity_version"
-            
-            if ! check_unity_ci_availability "$unity_version"; then
-                exit 1
-            fi
-            
+                        
             local repo_version=$(generate_repo_version)
             
             trigger_build "$unity_version" "$repo_version" "$platforms" "$build_base" "$build_windows"
