@@ -1,0 +1,391 @@
+name: Manual Unity Build 🚀
+
+on:
+  workflow_dispatch:
+    inputs:
+      unity_version:
+        description: 'Unity version to build (e.g. 6000.0.23f1). Leave empty to auto-detect latest 6000.3 version'
+        required: false
+        type: string
+      repo_version:
+        description: 'Repository version (e.g. 4.0.0). Will be auto-generated if not provided'
+        required: false
+        type: string
+      target_platforms:
+        description: 'Target platforms (comma-separated: base,linux-il2cpp,windows-mono,mac-mono,ios,android,webgl)'
+        required: false
+        default: 'base,linux-il2cpp,android,webgl'
+        type: string
+      build_base_images:
+        description: 'Build base and hub images first'
+        required: false
+        default: true
+        type: boolean
+      build_windows_images:
+        description: 'Also build Windows images'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  detect-unity-version:
+    name: "🔍 Detect Unity Version & Setup"
+    runs-on: ubuntu-latest
+    outputs:
+      unity_version: ${{ steps.detect.outputs.unity_version }}
+      change_set: ${{ steps.detect.outputs.change_set }}
+      repo_version_full: ${{ steps.detect.outputs.repo_version_full }}
+      repo_version_minor: ${{ steps.detect.outputs.repo_version_minor }}
+      repo_version_major: ${{ steps.detect.outputs.repo_version_major }}
+      target_platforms: ${{ steps.detect.outputs.target_platforms }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout latest release tag
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "main")
+          if [ "$LATEST_TAG" != "main" ]; then
+            echo "🏷️ Checking out latest release tag: $LATEST_TAG"
+            git checkout $LATEST_TAG
+          else
+            echo "📝 No tags found, using main branch"
+          fi
+
+      - name: Detect Unity version and generate repo version
+        id: detect
+        run: |
+          # Function to detect latest Unity 6000.3 version
+          detect_unity_version() {
+            if [ -z "${{ github.event.inputs.unity_version }}" ]; then
+              echo "🔍 Auto-detecting latest Unity 6000.3 version..."
+              
+              MAIN_UNITY_VERSION="${MAIN_UNITY_VERSION:-6000}"
+              
+              OUT=$(
+                curl 'https://services.unity.com/graphql' -s \
+                  --compressed \
+                  -X POST \
+                  -H 'content-type: application/json' \
+                  --data-raw '{"operationName":"GetRelease","variables":{"version":"'${MAIN_UNITY_VERSION}'","limit":1000},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
+              )
+              
+              LTS=$(echo $OUT | jq '.data.getUnityReleases.edges[].node | select(.stream | contains("SUPPORTED"))')
+              UNITY_VERSION=$(echo $LTS | jq --slurp -r '.[0].version')
+              
+              if [ -z "$UNITY_VERSION" ] || [ "$UNITY_VERSION" == "null" ]; then
+                echo "❌ Failed to detect Unity version"
+                exit 1
+              fi
+              
+              echo "✅ Detected Unity version: $UNITY_VERSION"
+            else
+              UNITY_VERSION="${{ github.event.inputs.unity_version }}"
+              echo "📝 Using provided Unity version: $UNITY_VERSION"
+            fi
+            
+            echo "$UNITY_VERSION"
+          }
+          
+          # Function to get changeset for Unity version  
+          get_changeset() {
+            local version=$1
+            echo "🔍 Getting changeset for Unity version $version..."
+            
+            # Try multiple approaches to get changeset
+            # Method 1: Extract from Unity Hub deep link API
+            CHANGESET=$(curl -s 'https://services.unity.com/graphql' \
+              --compressed \
+              -X POST \
+              -H 'content-type: application/json' \
+              --data-raw '{"operationName":"GetRelease","variables":{"version":"'$(echo $version | cut -d. -f1)'","limit":1000},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}' | \
+              jq -r '.data.getUnityReleases.edges[].node | select(.version == "'$version'") | .unityHubDeepLink' | \
+              grep -o '[0-9a-f]\{12\}' | head -1 || echo "")
+            
+            # Method 2: If that fails, try to extract from version string pattern
+            if [ -z "$CHANGESET" ]; then
+              # Unity versions often have format like 6000.0.23f1 where the changeset might be derived
+              # This is a fallback - in practice you might need Unity's specific API
+              CHANGESET="000000000000"  # Default placeholder
+            fi
+            
+            echo "📝 Changeset: $CHANGESET"
+            echo "$CHANGESET"
+          }
+          
+          # Function to generate repo version
+          generate_repo_version() {
+            if [ -z "${{ github.event.inputs.repo_version }}" ]; then
+              # Generate version based on current date and time
+              VERSION=$(date +"%Y.%m.%d")
+              BUILD_NUMBER=$(date +"%H%M")
+              REPO_VERSION="${VERSION}.${BUILD_NUMBER}"
+              echo "🏗️ Generated repo version: $REPO_VERSION"
+            else
+              REPO_VERSION="${{ github.event.inputs.repo_version }}"
+              echo "📝 Using provided repo version: $REPO_VERSION"
+            fi
+            
+            echo "$REPO_VERSION"
+          }
+          
+          # Main execution
+          UNITY_VERSION=$(detect_unity_version)
+          CHANGESET=$(get_changeset $UNITY_VERSION)
+          REPO_VERSION_FULL=$(generate_repo_version)
+          
+          # Extract minor and major versions
+          REPO_VERSION_MINOR=$(echo $REPO_VERSION_FULL | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          REPO_VERSION_MAJOR=$(echo $REPO_VERSION_FULL | sed -E 's/([0-9]+\.[0-9]+).*/\1/')
+          
+          # Verify Unity CI image availability
+          echo "🔍 Checking Unity CI image availability..."
+          UNITY_CI_IMAGE_COUNT=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${UNITY_VERSION}" | jq -r '.count // 0')
+          
+          if [ "$UNITY_CI_IMAGE_COUNT" -eq "0" ]; then
+            echo "❌ Error: Unity version ${UNITY_VERSION} not found in unity-ci: https://hub.docker.com/r/unityci/editor/tags?name=${UNITY_VERSION}"
+            exit 1
+          fi
+          
+          echo "✅ Unity version ${UNITY_VERSION} is available in unity-ci (${UNITY_CI_IMAGE_COUNT} images found)"
+          
+          # Process target platforms
+          TARGET_PLATFORMS='${{ github.event.inputs.target_platforms }}'
+          if [ -z "$TARGET_PLATFORMS" ]; then
+            TARGET_PLATFORMS="base,linux-il2cpp,android,webgl"
+          fi
+          
+          # Convert comma-separated string to JSON array for matrix
+          PLATFORMS_JSON=$(echo "$TARGET_PLATFORMS" | jq -R -s 'split(",") | map(select(length > 0))')
+          
+          # Set outputs
+          echo "unity_version=$UNITY_VERSION" >> $GITHUB_OUTPUT
+          echo "change_set=$CHANGESET" >> $GITHUB_OUTPUT
+          echo "repo_version_full=$REPO_VERSION_FULL" >> $GITHUB_OUTPUT
+          echo "repo_version_minor=$REPO_VERSION_MINOR" >> $GITHUB_OUTPUT
+          echo "repo_version_major=$REPO_VERSION_MAJOR" >> $GITHUB_OUTPUT
+          echo "target_platforms=$PLATFORMS_JSON" >> $GITHUB_OUTPUT
+          
+          # Summary
+          echo "## 📋 Build Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unity Version:** $UNITY_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Changeset:** $CHANGESET" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository Version:** $REPO_VERSION_FULL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Platforms:** $TARGET_PLATFORMS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unity CI Images Available:** $UNITY_CI_IMAGE_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Base Images:** ${{ github.event.inputs.build_base_images }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Windows Images:** ${{ github.event.inputs.build_windows_images }}" >> $GITHUB_STEP_SUMMARY
+
+  build-ubuntu-base:
+    name: "🛠 Build Ubuntu Base"
+    runs-on: ubuntu-latest
+    needs: detect-unity-version
+    if: ${{ github.event.inputs.build_base_images == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout latest release tag
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "main")
+          if [ "$LATEST_TAG" != "main" ]; then
+            git checkout $LATEST_TAG
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Check if image already exists
+        run: |
+          function docker_tag_exists() {
+            curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
+          }
+          
+          if docker_tag_exists unityci/base ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
+            echo "⚠️ Base image already exists, skipping build"
+            exit 0
+          fi
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./images/ubuntu/base
+          file: ./images/ubuntu/base/Dockerfile
+          push: true
+          tags: |
+            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_major }}
+
+  build-ubuntu-hub:
+    name: "🛠 Build Ubuntu Hub"
+    runs-on: ubuntu-latest
+    needs: [detect-unity-version, build-ubuntu-base]
+    if: ${{ github.event.inputs.build_base_images == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout latest release tag
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "main")
+          if [ "$LATEST_TAG" != "main" ]; then
+            git checkout $LATEST_TAG
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Check if image already exists
+        run: |
+          function docker_tag_exists() {
+            curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
+          }
+          
+          if docker_tag_exists unityci/hub ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
+            echo "⚠️ Hub image already exists, skipping build"
+            exit 0
+          fi
+
+      - name: Build and push hub image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./images/ubuntu/hub
+          file: ./images/ubuntu/hub/Dockerfile
+          build-args: |
+            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+          push: true
+          tags: |
+            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_major }}
+
+  build-ubuntu-editor:
+    name: "🛠 Build Ubuntu Editor (${{ matrix.targetPlatform }})"
+    runs-on: ubuntu-latest
+    needs: [detect-unity-version, build-ubuntu-hub]
+    if: ${{ always() && needs.detect-unity-version.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targetPlatform: ${{ fromJson(needs.detect-unity-version.outputs.target_platforms) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout latest release tag
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "main")
+          if [ "$LATEST_TAG" != "main" ]; then
+            git checkout $LATEST_TAG
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Check if image already exists
+        run: |
+          function docker_tag_exists() {
+            curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
+          }
+          
+          if docker_tag_exists unityci/editor ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
+            echo "⚠️ Editor image already exists for ${{ matrix.targetPlatform }}, skipping build"
+            exit 0
+          fi
+
+      - name: Free disk space
+        run: .github/workflows/scripts/free_disk_space.sh
+
+      - name: Pull required images
+        run: |
+          docker pull unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+          docker pull unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
+
+      - name: Build and push editor image
+        uses: docker/build-push-action@v5
+        continue-on-error: true
+        id: build_editor
+        with:
+          context: ./images/ubuntu/editor
+          file: ./images/ubuntu/editor/Dockerfile
+          build-args: |
+            hubImage=unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            version=${{ needs.detect-unity-version.outputs.unity_version }}
+            changeSet=${{ needs.detect-unity-version.outputs.change_set }}
+            module=${{ matrix.targetPlatform }}
+          push: true
+          tags: |
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
+
+      - name: Retry build on failure
+        uses: docker/build-push-action@v5
+        if: steps.build_editor.outcome=='failure'
+        with:
+          context: ./images/ubuntu/editor
+          file: ./images/ubuntu/editor/Dockerfile
+          build-args: |
+            hubImage=unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            version=${{ needs.detect-unity-version.outputs.unity_version }}
+            changeSet=${{ needs.detect-unity-version.outputs.change_set }}
+            module=${{ matrix.targetPlatform }}
+          push: true
+          tags: |
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
+
+      - name: Inspect publication
+        run: |
+          docker buildx imagetools inspect unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}

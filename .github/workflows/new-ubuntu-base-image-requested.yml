@@ -5,6 +5,12 @@ on:
     types:
       - new_base_images_requested
       - new_ubuntu_base_image_requested
+  workflow_dispatch:
+    inputs:
+      repo_version:
+        description: 'Repository version (e.g. 4.0.0)'
+        required: true
+        type: string
 
 # Further reading:
 # https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#repository_dispatch
@@ -31,11 +37,11 @@ jobs:
       #################
       - name: Show hook input
         run: |
-          echo "Event ${{ github.event.action }}"
-          echo "jobId: ${{ github.event.client_payload.jobId }}"
-          echo "repoVersion (full): ${{ github.event.client_payload.repoVersionFull }}"
-          echo "repoVersion (only minor and major): ${{ github.event.client_payload.repoVersionMinor }}"
-          echo "repoVersion (only major): ${{ github.event.client_payload.repoVersionMajor }}"
+          echo "Event ${{ github.event.action || 'workflow_dispatch' }}"
+          echo "jobId: ${{ github.event.client_payload.jobId || format('manual-{0}', github.run_id) }}"
+          echo "repoVersion (full): ${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}"
+          echo "repoVersion (only minor and major): ${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}"
+          echo "repoVersion (only major): ${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}"
       - name: Report new build
         uses: ./.github/workflows/actions/report-to-backend
         with:
@@ -65,7 +71,7 @@ jobs:
             curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
           }
 
-          if docker_tag_exists unityci/base ubuntu-${{ github.event.client_payload.repoVersionFull }} ; then
+          if docker_tag_exists unityci/base ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }} ; then
             echo "Image already exists. Exiting."
             exit 1
           fi
@@ -89,14 +95,12 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache
           push: true
           tags: |
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionFull }}
-            unityci/base:${{ github.event.client_payload.repoVersionFull }}
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMinor }}
-            unityci/base:${{ github.event.client_payload.repoVersionMinor }}
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMajor }}
-            unityci/base:${{ github.event.client_payload.repoVersionMajor }}
-            unityci/base:ubuntu-latest
-            unityci/base:latest
+            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
+            unityci/base:${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
+            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
+            unityci/base:${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
+            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
+            unityci/base:${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
       - name: Inspect
         run: |
           docker buildx imagetools inspect unityci/base:ubuntu-${{ github.event.client_payload.repoVersionFull }}

@@ -1,0 +1,108 @@
+name: Test Unity Version Detection 🧪
+
+on:
+  workflow_dispatch:
+    inputs:
+      unity_major_version:
+        description: 'Unity major version to test (e.g. 6000, 2023)'
+        required: false
+        default: '6000'
+        type: string
+
+jobs:
+  test-detection:
+    name: "🧪 Test Unity Version Detection"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Test Unity Version Detection
+        run: |
+          echo "🧪 Testing Unity version detection for ${{ github.event.inputs.unity_major_version || '6000' }}"
+          
+          MAIN_UNITY_VERSION="${{ github.event.inputs.unity_major_version || '6000' }}"
+          
+          echo "🔍 Fetching Unity releases for version $MAIN_UNITY_VERSION..."
+          
+          OUT=$(
+            curl 'https://services.unity.com/graphql' -s \
+              --compressed \
+              -X POST \
+              -H 'content-type: application/json' \
+              --data-raw '{"operationName":"GetRelease","variables":{"version":"'${MAIN_UNITY_VERSION}'","limit":10},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
+          )
+          
+          if [[ $? -ne 0 ]]; then
+            echo "❌ Failed to fetch Unity releases"
+            exit 1
+          fi
+          
+          echo "📊 Raw API response (first 500 chars):"
+          echo "$OUT" | head -c 500
+          echo ""
+          echo ""
+          
+          echo "📋 Available Unity $MAIN_UNITY_VERSION versions:"
+          echo "$OUT" | jq -r '.data.getUnityReleases.edges[].node | "\(.version) - \(.stream) - \(.releaseDate)"' | head -10
+          
+          echo ""
+          echo "🎯 Latest SUPPORTED version:"
+          LTS=$(echo $OUT | jq '.data.getUnityReleases.edges[].node | select(.stream | contains("SUPPORTED"))')
+          LATEST_VERSION=$(echo $LTS | jq --slurp -r '.[0].version')
+          
+          if [[ -z "$LATEST_VERSION" ]] || [[ "$LATEST_VERSION" == "null" ]]; then
+            echo "❌ No supported version found"
+            exit 1
+          fi
+          
+          echo "✅ Latest supported version: $LATEST_VERSION"
+          
+          echo ""
+          echo "🔍 Checking Unity CI availability for $LATEST_VERSION..."
+          
+          UNITY_CI_COUNT=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${LATEST_VERSION}" | jq -r '.count // 0')
+          
+          echo "📊 Unity CI images found: $UNITY_CI_COUNT"
+          
+          if [[ $UNITY_CI_COUNT -gt 0 ]]; then
+            echo "✅ Unity CI images are available!"
+          else
+            echo "⚠️ No Unity CI images found for this version"
+            echo "Check: https://hub.docker.com/r/unityci/editor/tags?name=${LATEST_VERSION}"
+          fi
+          
+          # Generate test repo version
+          REPO_VERSION=$(date +"%Y.%m.%d.%H%M")
+          
+          echo ""
+          echo "## 📋 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unity Major Version:** $MAIN_UNITY_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Supported Version:** $LATEST_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unity CI Images Available:** $UNITY_CI_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Generated Repo Version:** $REPO_VERSION" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ $UNITY_CI_COUNT -gt 0 ]]; then
+            echo "- **Status:** ✅ Ready for build" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** ⚠️ Unity CI images not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Test Script Locally
+        run: |
+          echo "🧪 Testing unity-version-manager.sh script..."
+          
+          if [[ -f "./scripts/unity-version-manager.sh" ]]; then
+            echo "✅ Script found"
+            chmod +x ./scripts/unity-version-manager.sh
+            
+            echo "🔍 Testing latest version detection..."
+            ./scripts/unity-version-manager.sh latest ${{ github.event.inputs.unity_major_version || '6000' }}
+            
+            echo ""
+            echo "📋 Testing version listing (top 5)..."
+            ./scripts/unity-version-manager.sh versions ${{ github.event.inputs.unity_major_version || '6000' }} | head -5
+          else
+            echo "❌ Script not found at ./scripts/unity-version-manager.sh"
+            exit 1
+          fi
