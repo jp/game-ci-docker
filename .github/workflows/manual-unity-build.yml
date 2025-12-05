@@ -142,10 +142,12 @@ jobs:
           
           # Verify Unity CI image availability
           echo "🔍 Checking Unity CI image availability..."
-          UNITY_CI_IMAGE_COUNT=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${UNITY_VERSION}" | jq -r '.count // 0')
+          DOCKER_RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${UNITY_VERSION}")
+          UNITY_CI_IMAGE_COUNT=$(echo "$DOCKER_RESPONSE" | jq -r '.count // 0' 2>/dev/null || echo "0")
           
           if [ "$UNITY_CI_IMAGE_COUNT" -eq "0" ]; then
             echo "❌ Error: Unity version ${UNITY_VERSION} not found in unity-ci: https://hub.docker.com/r/unityci/editor/tags?name=${UNITY_VERSION}"
+            echo "Docker Hub response: $DOCKER_RESPONSE" | head -200
             exit 1
           fi
           
@@ -290,8 +292,8 @@ jobs:
             unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
             unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_major }}
 
-  build-ubuntu-editor:
-    name: "🛠 Build Ubuntu Editor (${{ matrix.targetPlatform }})"
+  trigger-ubuntu-builds:
+    name: "🚀 Trigger Ubuntu Builds"
     runs-on: ubuntu-latest
     needs: [detect-unity-version, build-ubuntu-hub]
     if: ${{ always() && needs.detect-unity-version.result == 'success' }}
@@ -300,92 +302,133 @@ jobs:
       matrix:
         targetPlatform: ${{ fromJson(needs.detect-unity-version.outputs.target_platforms) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Trigger Ubuntu Editor Build for ${{ matrix.targetPlatform }}
+        uses: peter-evans/repository-dispatch@v3
         with:
-          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: new_post_2019_2_editor_image_requested
+          client-payload: |
+            {
+              "jobId": "manual-${{ github.run_id }}-ubuntu-${{ matrix.targetPlatform }}",
+              "editorVersion": "${{ needs.detect-unity-version.outputs.unity_version }}",
+              "changeSet": "${{ needs.detect-unity-version.outputs.change_set }}",
+              "repoVersionFull": "${{ needs.detect-unity-version.outputs.repo_version_full }}",
+              "repoVersionMinor": "${{ needs.detect-unity-version.outputs.repo_version_minor }}",
+              "repoVersionMajor": "${{ needs.detect-unity-version.outputs.repo_version_major }}"
+            }
 
-      - name: Checkout latest release tag
-        run: |
-          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "main")
-          if [ "$LATEST_TAG" != "main" ]; then
-            git checkout $LATEST_TAG
-          fi
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
+  trigger-windows-builds:
+    name: "🚀 Trigger Windows Builds"
+    runs-on: ubuntu-latest
+    needs: [detect-unity-version]
+    if: ${{ github.event.inputs.build_windows_images == 'true' && needs.detect-unity-version.result == 'success' }}
+    steps:
+      - name: Trigger Windows Base Build
+        uses: peter-evans/repository-dispatch@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: new_windows_base_image_requested
+          client-payload: |
+            {
+              "jobId": "manual-${{ github.run_id }}-windows-base",
+              "repoVersionFull": "${{ needs.detect-unity-version.outputs.repo_version_full }}",
+              "repoVersionMinor": "${{ needs.detect-unity-version.outputs.repo_version_minor }}",
+              "repoVersionMajor": "${{ needs.detect-unity-version.outputs.repo_version_major }}"
+            }
 
-      - name: Check if image already exists
+      - name: Trigger Windows Hub Build  
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: new_windows_hub_image_requested
+          client-payload: |
+            {
+              "jobId": "manual-${{ github.run_id }}-windows-hub",
+              "repoVersionFull": "${{ needs.detect-unity-version.outputs.repo_version_full }}",
+              "repoVersionMinor": "${{ needs.detect-unity-version.outputs.repo_version_minor }}",
+              "repoVersionMajor": "${{ needs.detect-unity-version.outputs.repo_version_major }}"
+            }
+
+      - name: Wait for Windows base images
         run: |
-          function docker_tag_exists() {
-            curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
-          }
+          echo "⏳ Waiting for Windows base images to build..."
+          sleep 600  # Wait 10 minutes for Windows base images
+
+  trigger-windows-editor-builds:
+    name: "🚀 Trigger Windows Editor (${{ matrix.targetPlatform }})"
+    runs-on: ubuntu-latest
+    needs: [detect-unity-version, trigger-windows-builds]
+    if: ${{ github.event.inputs.build_windows_images == 'true' && needs.detect-unity-version.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targetPlatform: ${{ fromJson(needs.detect-unity-version.outputs.target_platforms) }}
+    steps:
+      - name: Trigger Windows Editor Build for ${{ matrix.targetPlatform }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: new_windows_post_2019_2_editor_image_requested
+          client-payload: |
+            {
+              "jobId": "manual-${{ github.run_id }}-windows-${{ matrix.targetPlatform }}",
+              "editorVersion": "${{ needs.detect-unity-version.outputs.unity_version }}",
+              "changeSet": "${{ needs.detect-unity-version.outputs.change_set }}",
+              "repoVersionFull": "${{ needs.detect-unity-version.outputs.repo_version_full }}",
+              "repoVersionMinor": "${{ needs.detect-unity-version.outputs.repo_version_minor }}",
+              "repoVersionMajor": "${{ needs.detect-unity-version.outputs.repo_version_major }}"
+            }
+
+  build-status:
+    name: "📊 Build Status Summary"
+    runs-on: ubuntu-latest
+    needs: [detect-unity-version, trigger-ubuntu-builds, trigger-windows-builds, trigger-windows-editor-builds]
+    if: ${{ always() && needs.detect-unity-version.result == 'success' }}
+    steps:
+      - name: Generate Build Summary
+        run: |
+          echo "# 🚀 Unity Build Triggered Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unity Version:** ${{ needs.detect-unity-version.outputs.unity_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository Version:** ${{ needs.detect-unity-version.outputs.repo_version_full }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Platforms:** ${{ github.event.inputs.target_platforms || 'base,linux-il2cpp,android,webgl' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Base Images:** ${{ github.event.inputs.build_base_images }}" >> $GITHUB_STEP_SUMMARY  
+          echo "- **Build Windows Images:** ${{ github.event.inputs.build_windows_images }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Triggered Workflows" >> $GITHUB_STEP_SUMMARY
+          echo "The following downstream workflows have been triggered:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          if docker_tag_exists unityci/editor ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
-            echo "⚠️ Editor image already exists for ${{ matrix.targetPlatform }}, skipping build"
-            exit 0
+          if [ "${{ github.event.inputs.build_base_images }}" == "true" ]; then
+            echo "### Ubuntu Images" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Ubuntu Base Image Build" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Ubuntu Hub Image Build" >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Free disk space
-        run: .github/workflows/scripts/free_disk_space.sh
-
-      - name: Pull required images
-        run: |
-          docker pull unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
-          docker pull unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
-
-      - name: Build and push editor image
-        uses: docker/build-push-action@v5
-        continue-on-error: true
-        id: build_editor
-        with:
-          context: ./images/ubuntu/editor
-          file: ./images/ubuntu/editor/Dockerfile
-          build-args: |
-            hubImage=unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            version=${{ needs.detect-unity-version.outputs.unity_version }}
-            changeSet=${{ needs.detect-unity-version.outputs.change_set }}
-            module=${{ matrix.targetPlatform }}
-          push: true
-          tags: |
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
-
-      - name: Retry build on failure
-        uses: docker/build-push-action@v5
-        if: steps.build_editor.outcome=='failure'
-        with:
-          context: ./images/ubuntu/editor
-          file: ./images/ubuntu/editor/Dockerfile
-          build-args: |
-            hubImage=unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            version=${{ needs.detect-unity-version.outputs.unity_version }}
-            changeSet=${{ needs.detect-unity-version.outputs.change_set }}
-            module=${{ matrix.targetPlatform }}
-          push: true
-          tags: |
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/editor:${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
-
-      - name: Inspect publication
-        run: |
-          docker buildx imagetools inspect unityci/editor:ubuntu-${{ needs.detect-unity-version.outputs.unity_version }}-${{ matrix.targetPlatform }}-${{ needs.detect-unity-version.outputs.repo_version_full }}
+          
+          echo "- ✅ Ubuntu Editor Builds (per platform)" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.build_windows_images }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Windows Images" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Windows Base Image Build" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Windows Hub Image Build" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Windows Editor Builds (per platform)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Monitoring" >> $GITHUB_STEP_SUMMARY
+          echo "Check the **Actions** tab for individual workflow progress:" >> $GITHUB_STEP_SUMMARY
+          echo "- Look for workflows with job IDs starting with \`manual-${{ github.run_id }}-\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Ubuntu editor builds: \`new-ubuntu-post-2019-2-editor-image-requested\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.build_windows_images }}" == "true" ]; then
+            echo "- Windows builds: \`new-windows-*-image-requested\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Expected completion time:** 1-3 hours depending on platform count" >> $GITHUB_STEP_SUMMARY

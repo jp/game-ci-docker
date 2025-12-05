@@ -68,11 +68,13 @@ check_unity_ci_availability() {
     
     log_info "Checking Unity CI image availability for $unity_version..."
     
-    local count=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${unity_version}" | jq -r '.count // 0')
+    local docker_response=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${unity_version}")
+    local count=$(echo "$docker_response" | jq -r '.count // 0' 2>/dev/null || echo "0")
     
     if [[ $count -eq 0 ]]; then
         log_error "Unity version $unity_version not found in unity-ci Docker Hub repository"
         log_info "Check: https://hub.docker.com/r/unityci/editor/tags?name=${unity_version}"
+        log_info "Docker Hub API response: $(echo "$docker_response" | head -200)"
         return 1
     fi
     

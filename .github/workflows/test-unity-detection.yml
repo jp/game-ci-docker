@@ -61,7 +61,12 @@ jobs:
           echo ""
           echo "🔍 Checking Unity CI availability for $LATEST_VERSION..."
           
-          UNITY_CI_COUNT=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${LATEST_VERSION}" | jq -r '.count // 0')
+          DOCKER_RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${LATEST_VERSION}")
+          echo "📊 Docker Hub API response sample:"
+          echo "$DOCKER_RESPONSE" | head -200
+          echo ""
+          
+          UNITY_CI_COUNT=$(echo "$DOCKER_RESPONSE" | jq -r '.count // 0' 2>/dev/null || echo "0")
           
           echo "📊 Unity CI images found: $UNITY_CI_COUNT"
           
