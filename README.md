@@ -21,6 +21,22 @@ See the [hub readme](images/ubuntu/hub/README.md) for hub image usage.
 
 See the [editor readme](images/ubuntu/editor/README.md) for editor image usage.
 
+## 🚀 Manual Build System
+
+The original bot-triggered build system has been replaced with a manual trigger system that you can control:
+
+### **Quick Start**
+1. **Configure Unity License**: Follow the [Unity Licensing Guide](./UNITY_LICENSING_GUIDE.md) 
+2. **Run Manual Build**: Use the [Manual Build Guide](./MANUAL_BUILD_GUIDE.md)
+3. **GitHub Actions**: Go to Actions → "Manual Unity Build 🚀" → Run workflow
+
+### **Key Features**
+- ✅ Auto-detects latest Unity 6000.3 versions
+- ✅ Builds Ubuntu and Windows images
+- ✅ Supports all target platforms
+- ✅ Easy GitHub Actions UI
+- ✅ Command-line tools included
+
 ## Community
 
 Feel free to join us on

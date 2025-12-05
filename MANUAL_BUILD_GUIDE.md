@@ -118,6 +118,12 @@ gh auth login
   - `DOCKERHUB_USERNAME`
   - `DOCKERHUB_TOKEN`
 
+**Unity licensing errors ("Missing Unity License File")**
+- This is the most common build failure!
+- Follow the [Unity Licensing Guide](./UNITY_LICENSING_GUIDE.md)
+- Ensure `UNITY_LICENSE` or `UNITY_SERIAL` secrets are configured
+- Test with the license test workflow first
+
 ### Build Failures
 
 **Disk space errors**

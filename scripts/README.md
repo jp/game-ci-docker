@@ -21,6 +21,7 @@ The `unity-version-manager.sh` script helps you manage Unity versions and trigge
 - `curl` (for API calls)
 - `jq` (for JSON processing)  
 - `gh` (GitHub CLI, for triggering workflows)
+- **Unity License configured** (see [Unity Licensing Guide](../UNITY_LICENSING_GUIDE.md))
 
 Install missing dependencies:
 ```bash

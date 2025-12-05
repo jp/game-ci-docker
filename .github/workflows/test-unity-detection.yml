@@ -25,16 +25,17 @@ jobs:
           
           echo "🔍 Fetching Unity releases for version $MAIN_UNITY_VERSION..."
           
+          echo "📡 Making GraphQL request to Unity API..."
           OUT=$(
             curl 'https://services.unity.com/graphql' -s \
               --compressed \
               -X POST \
               -H 'content-type: application/json' \
-              --data-raw '{"operationName":"GetRelease","variables":{"version":"'${MAIN_UNITY_VERSION}'","limit":10},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
+              --data-raw '{"operationName":"GetRelease","variables":{"version":"'${MAIN_UNITY_VERSION}'","limit":50},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
           )
           
-          if [[ $? -ne 0 ]]; then
-            echo "❌ Failed to fetch Unity releases"
+          if [[ $? -ne 0 ]] || [[ -z "$OUT" ]]; then
+            echo "❌ Failed to fetch Unity releases or empty response"
             exit 1
           fi
           
@@ -43,20 +44,49 @@ jobs:
           echo ""
           echo ""
           
-          echo "📋 Available Unity $MAIN_UNITY_VERSION versions:"
-          echo "$OUT" | jq -r '.data.getUnityReleases.edges[].node | "\(.version) - \(.stream) - \(.releaseDate)"' | head -10
-          
-          echo ""
-          echo "🎯 Latest SUPPORTED version:"
-          LTS=$(echo $OUT | jq '.data.getUnityReleases.edges[].node | select(.stream | contains("SUPPORTED"))')
-          LATEST_VERSION=$(echo $LTS | jq --slurp -r '.[0].version')
-          
-          if [[ -z "$LATEST_VERSION" ]] || [[ "$LATEST_VERSION" == "null" ]]; then
-            echo "❌ No supported version found"
+          # Check if API response contains errors
+          if echo "$OUT" | jq -e '.errors' >/dev/null 2>&1; then
+            echo "❌ Unity API returned errors:"
+            echo "$OUT" | jq '.errors'
             exit 1
           fi
           
-          echo "✅ Latest supported version: $LATEST_VERSION"
+          # Check if data exists
+          if ! echo "$OUT" | jq -e '.data.getUnityReleases.edges' >/dev/null 2>&1; then
+            echo "❌ No Unity releases data found in response"
+            echo "Full response: $OUT"
+            exit 1
+          fi
+          
+          echo "📋 Available Unity $MAIN_UNITY_VERSION versions:"
+          echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream) - \(.releaseDate)"' | head -10
+          
+          echo ""
+          echo "🎯 Detecting latest stable version:"
+          
+          # Try SUPPORTED versions first
+          LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("SUPPORTED"))' 2>/dev/null || echo "")
+          
+          if [[ -z "$LTS" ]]; then
+            echo "⚠️ No SUPPORTED versions found, trying LTS..."
+            LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("LTS"))' 2>/dev/null || echo "")
+          fi
+          
+          if [[ -z "$LTS" ]]; then
+            echo "⚠️ No LTS versions found, taking first stable version..."
+            LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream != "ALPHA" and .stream != "BETA")' 2>/dev/null | head -1)
+          fi
+          
+          LATEST_VERSION=$(echo "$LTS" | jq --slurp -r '.[0].version // empty' 2>/dev/null)
+          
+          if [[ -z "$LATEST_VERSION" ]] || [[ "$LATEST_VERSION" == "null" ]]; then
+            echo "❌ No suitable version found"
+            echo "Available versions:"
+            echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -5
+            exit 1
+          fi
+          
+          echo "✅ Selected Unity version: $LATEST_VERSION"
           
           echo ""
           echo "🔍 Checking Unity CI availability for $LATEST_VERSION..."

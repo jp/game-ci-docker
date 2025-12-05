@@ -38,6 +38,7 @@ get_latest_unity_version() {
     
     log_info "Fetching latest Unity version for $major_version..."
     
+    log_info "Making GraphQL request to Unity API..."
     local out=$(
         curl 'https://services.unity.com/graphql' -s \
             --compressed \
@@ -46,16 +47,44 @@ get_latest_unity_version() {
             --data-raw '{"operationName":"GetRelease","variables":{"version":"'${major_version}'","limit":1000},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
     )
     
-    if [[ $? -ne 0 ]]; then
-        log_error "Failed to fetch Unity releases from API"
+    if [[ $? -ne 0 ]] || [[ -z "$out" ]]; then
+        log_error "Failed to fetch Unity releases from API or empty response"
         return 1
     fi
     
-    local lts=$(echo $out | jq '.data.getUnityReleases.edges[].node | select(.stream | contains("SUPPORTED"))')
-    local unity_version=$(echo $lts | jq --slurp -r '.[0].version')
+    # Check for API errors
+    if echo "$out" | jq -e '.errors' >/dev/null 2>&1; then
+        log_error "Unity API returned errors:"
+        echo "$out" | jq '.errors'
+        return 1
+    fi
+    
+    # Check if data exists
+    if ! echo "$out" | jq -e '.data.getUnityReleases.edges' >/dev/null 2>&1; then
+        log_error "No Unity releases data found in response"
+        echo "Response: $out" | head -200
+        return 1
+    fi
+    
+    # Try SUPPORTED versions first
+    local lts=$(echo "$out" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("SUPPORTED"))' 2>/dev/null || echo "")
+    
+    if [[ -z "$lts" ]]; then
+        log_warning "No SUPPORTED versions found, trying LTS..."
+        lts=$(echo "$out" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("LTS"))' 2>/dev/null || echo "")
+    fi
+    
+    if [[ -z "$lts" ]]; then
+        log_warning "No LTS versions found, taking first stable version..."
+        lts=$(echo "$out" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream != "ALPHA" and .stream != "BETA")' 2>/dev/null | head -1)
+    fi
+    
+    local unity_version=$(echo "$lts" | jq --slurp -r '.[0].version // empty' 2>/dev/null)
     
     if [[ -z "$unity_version" ]] || [[ "$unity_version" == "null" ]]; then
-        log_error "No supported Unity version found for $major_version"
+        log_error "No suitable Unity version found for $major_version"
+        log_info "Available versions:"
+        echo "$out" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -5
         return 1
     fi
     
