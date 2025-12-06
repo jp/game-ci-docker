@@ -105,20 +105,16 @@ jobs:
               echo "📋 All available Unity $MAIN_UNITY_VERSION versions:" >&2
               echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -10 >&2
               
-              # Try to get SUPPORTED versions first
-              LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("SUPPORTED"))' 2>/dev/null || echo "")
+              # Get the latest stable version (first non-alpha/beta in response)
+              # Unity API returns versions in descending order by release date
+              echo "🎯 Selecting latest stable version (excluding ALPHA/BETA)..." >&2
+              UNITY_VERSION=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream != "ALPHA" and .stream != "BETA") | .version' 2>/dev/null | head -1)
               
-              if [ -z "$LTS" ]; then
-                echo "⚠️ No SUPPORTED versions found, trying LTS versions..." >&2
-                LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("LTS"))' 2>/dev/null || echo "")
+              if [ -n "$UNITY_VERSION" ]; then
+                # Get the stream info for the selected version
+                SELECTED_STREAM=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.version == "'$UNITY_VERSION'") | .stream' 2>/dev/null)
+                echo "🎯 Selected: $UNITY_VERSION ($SELECTED_STREAM)" >&2
               fi
-              
-              if [ -z "$LTS" ]; then
-                echo "⚠️ No LTS versions found, taking the first stable version..." >&2
-                LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream != "ALPHA" and .stream != "BETA")' 2>/dev/null | head -1)
-              fi
-              
-              UNITY_VERSION=$(echo "$LTS" | jq --slurp -r '.[0].version // empty' 2>/dev/null)
               
               if [ -z "$UNITY_VERSION" ] || [ "$UNITY_VERSION" == "null" ]; then
                 echo "❌ Failed to detect Unity version from available releases" >&2
@@ -217,7 +213,8 @@ jobs:
           echo "🎯 Target platforms: $TARGET_PLATFORMS" >&2
           
           # Convert comma-separated string to JSON array for matrix
-          PLATFORMS_JSON=$(echo "$TARGET_PLATFORMS" | jq -R -s 'split(",") | map(select(length > 0))')
+          PLATFORMS_JSON=$(echo "$TARGET_PLATFORMS" | jq -R -s 'split(",") | map(select(length > 0))' 2>/dev/null)
+          echo "📊 Platforms JSON: $PLATFORMS_JSON" >&2
           
           # Set outputs
           echo "unity_version=$UNITY_VERSION" >> $GITHUB_OUTPUT
