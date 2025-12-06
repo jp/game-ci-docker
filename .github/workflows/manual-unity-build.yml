@@ -212,8 +212,8 @@ jobs:
           fi
           echo "🎯 Target platforms: $TARGET_PLATFORMS" >&2
           
-          # Convert comma-separated string to JSON array for matrix
-          PLATFORMS_JSON=$(echo "$TARGET_PLATFORMS" | jq -R -s 'split(",") | map(select(length > 0))' 2>/dev/null)
+          # Convert comma-separated string to JSON array for matrix (compact format, clean)
+          PLATFORMS_JSON=$(echo -n "$TARGET_PLATFORMS" | jq -R -s -c 'split(",") | map(select(length > 0))' 2>/dev/null)
           echo "📊 Platforms JSON: $PLATFORMS_JSON" >&2
           
           # Set outputs
