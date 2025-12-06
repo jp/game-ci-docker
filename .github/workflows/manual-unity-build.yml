@@ -64,11 +64,11 @@ jobs:
           # Function to detect latest Unity 6000.3 version
           detect_unity_version() {
             if [ -z "$INPUT_UNITY_VERSION" ]; then
-              echo "🔍 Auto-detecting latest Unity 6000.3 version..."
+              echo "🔍 Auto-detecting latest Unity 6000.3 version..." >&2
               
               MAIN_UNITY_VERSION="${MAIN_UNITY_VERSION:-6000}"
               
-              echo "📡 Making GraphQL request to Unity API..."
+              echo "📡 Making GraphQL request to Unity API..." >&2
               OUT=$(
                 curl 'https://services.unity.com/graphql' -s \
                   --compressed \
@@ -77,60 +77,60 @@ jobs:
                   --data-raw '{"operationName":"GetRelease","variables":{"version":"'${MAIN_UNITY_VERSION}'","limit":1000},"query":"query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {\n  getUnityReleases(\n    limit: $limit\n    skip: $skip\n    stream: $stream\n    version: $version\n    entitlements: [XLTS]\n  ) {\n    totalCount\n    edges {\n      node {\n        version\n        entitlements\n        releaseDate\n        unityHubDeepLink\n        stream\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}'
               )
               
-              echo "📊 Raw API response (first 500 characters):"
-              echo "$OUT" | head -c 500
-              echo ""
+              echo "📊 Raw API response (first 500 characters):" >&2
+              echo "$OUT" | head -c 500 >&2
+              echo "" >&2
               
               # Check if API response is valid
               if [ -z "$OUT" ]; then
-                echo "❌ Empty response from Unity API"
+                echo "❌ Empty response from Unity API" >&2
                 exit 1
               fi
               
               # Check if response contains error
               if echo "$OUT" | jq -e '.errors' >/dev/null 2>&1; then
-                echo "❌ Unity API returned errors:"
-                echo "$OUT" | jq '.errors'
+                echo "❌ Unity API returned errors:" >&2
+                echo "$OUT" | jq '.errors' >&2
                 exit 1
               fi
               
               # Check if data exists
               if ! echo "$OUT" | jq -e '.data.getUnityReleases.edges' >/dev/null 2>&1; then
-                echo "❌ No Unity releases data found in response"
-                echo "Full response: $OUT"
+                echo "❌ No Unity releases data found in response" >&2
+                echo "Full response: $OUT" >&2
                 exit 1
               fi
               
               # Get all versions first for debugging
-              echo "📋 All available Unity $MAIN_UNITY_VERSION versions:"
-              echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -10
+              echo "📋 All available Unity $MAIN_UNITY_VERSION versions:" >&2
+              echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -10 >&2
               
               # Try to get SUPPORTED versions first
               LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("SUPPORTED"))' 2>/dev/null || echo "")
               
               if [ -z "$LTS" ]; then
-                echo "⚠️ No SUPPORTED versions found, trying LTS versions..."
+                echo "⚠️ No SUPPORTED versions found, trying LTS versions..." >&2
                 LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream | contains("LTS"))' 2>/dev/null || echo "")
               fi
               
               if [ -z "$LTS" ]; then
-                echo "⚠️ No LTS versions found, taking the first stable version..."
+                echo "⚠️ No LTS versions found, taking the first stable version..." >&2
                 LTS=$(echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | select(.stream != "ALPHA" and .stream != "BETA")' 2>/dev/null | head -1)
               fi
               
               UNITY_VERSION=$(echo "$LTS" | jq --slurp -r '.[0].version // empty' 2>/dev/null)
               
               if [ -z "$UNITY_VERSION" ] || [ "$UNITY_VERSION" == "null" ]; then
-                echo "❌ Failed to detect Unity version from available releases"
-                echo "Available releases:"
-                echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -5
+                echo "❌ Failed to detect Unity version from available releases" >&2
+                echo "Available releases:" >&2
+                echo "$OUT" | jq -r '.data.getUnityReleases.edges[]?.node | "\(.version) - \(.stream)"' | head -5 >&2
                 exit 1
               fi
               
-              echo "✅ Detected Unity version: $UNITY_VERSION"
+              echo "✅ Detected Unity version: $UNITY_VERSION" >&2
             else
               UNITY_VERSION="$INPUT_UNITY_VERSION"
-              echo "📝 Using provided Unity version: $UNITY_VERSION"
+              echo "📝 Using provided Unity version: $UNITY_VERSION" >&2
             fi
             
             echo "$UNITY_VERSION"
@@ -139,7 +139,7 @@ jobs:
           # Function to get changeset for Unity version  
           get_changeset() {
             local version=$1
-            echo "🔍 Getting changeset for Unity version $version..."
+            echo "🔍 Getting changeset for Unity version $version..." >&2
             
             # Extract changeset from Unity Hub deep link format
             # Unity Hub deep links look like: unityhub://6000.3.0f1/d1870ce95baf
@@ -147,7 +147,7 @@ jobs:
             
             # Method 1: Try to extract from known Unity Hub deep link pattern
             local major_version=$(echo $version | cut -d. -f1)
-            echo "🌐 Querying Unity API for changeset..."
+            echo "🌐 Querying Unity API for changeset..." >&2
             
             local api_response=$(curl -s 'https://services.unity.com/graphql' \
               --compressed \
@@ -159,26 +159,26 @@ jobs:
             
             # Check if we got a valid API response
             if [ -n "$api_response" ] && echo "$api_response" | jq -e '.data.getUnityReleases.edges' >/dev/null 2>&1; then
-              echo "✅ Got Unity API response, searching for changeset..."
+              echo "✅ Got Unity API response, searching for changeset..." >&2
               
               # Try to find the specific version and extract changeset from deep link
               CHANGESET=$(echo "$api_response" | jq -r '.data.getUnityReleases.edges[]?.node | select(.version == "'$version'") | .unityHubDeepLink' 2>/dev/null | \
                 grep -o '[0-9a-f]\{12\}' | head -1 2>/dev/null || echo "")
               
               if [ -n "$CHANGESET" ]; then
-                echo "✅ Found changeset from Unity Hub deep link: $CHANGESET"
+                echo "✅ Found changeset from Unity Hub deep link: $CHANGESET" >&2
               else
-                echo "⚠️ Could not extract changeset from Unity API response"
+                echo "⚠️ Could not extract changeset from Unity API response" >&2
               fi
             else
-              echo "⚠️ Unity API did not return valid data for changeset lookup"
+              echo "⚠️ Unity API did not return valid data for changeset lookup" >&2
             fi
             
             # Method 2: Fallback to a reasonable default
             if [ -z "$CHANGESET" ]; then
               # Use a common format: first 12 chars of a hash based on version
               CHANGESET=$(echo -n "$version" | md5sum 2>/dev/null | cut -c1-12 || echo "000000000000")
-              echo "⚠️ Using fallback changeset: $CHANGESET"
+              echo "⚠️ Using fallback changeset: $CHANGESET" >&2
             fi
             
             echo "$CHANGESET"
@@ -191,10 +191,10 @@ jobs:
               VERSION=$(date +"%Y.%m.%d")
               BUILD_NUMBER=$(date +"%H%M")
               REPO_VERSION="${VERSION}.${BUILD_NUMBER}"
-              echo "🏗️ Generated repo version: $REPO_VERSION"
+              echo "🏗️ Generated repo version: $REPO_VERSION" >&2
             else
               REPO_VERSION="$INPUT_REPO_VERSION"
-              echo "📝 Using provided repo version: $REPO_VERSION"
+              echo "📝 Using provided repo version: $REPO_VERSION" >&2
             fi
             
             echo "$REPO_VERSION"
@@ -214,7 +214,7 @@ jobs:
           if [ -z "$TARGET_PLATFORMS" ]; then
             TARGET_PLATFORMS="base,linux-il2cpp,android,webgl"
           fi
-          echo "🎯 Target platforms: $TARGET_PLATFORMS"
+          echo "🎯 Target platforms: $TARGET_PLATFORMS" >&2
           
           # Convert comma-separated string to JSON array for matrix
           PLATFORMS_JSON=$(echo "$TARGET_PLATFORMS" | jq -R -s 'split(",") | map(select(length > 0))')
