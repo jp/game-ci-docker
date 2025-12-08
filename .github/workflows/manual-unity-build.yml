@@ -349,13 +349,99 @@ jobs:
   trigger-ubuntu-builds:
     name: "🚀 Trigger Ubuntu Builds"
     runs-on: ubuntu-latest
-    needs: [detect-unity-version, build-ubuntu-hub]
-    if: ${{ always() && needs.detect-unity-version.result == 'success' }}
+    needs: [detect-unity-version, build-ubuntu-base, build-ubuntu-hub]
+    if: ${{ always() && needs.detect-unity-version.result == 'success' && (needs.build-ubuntu-hub.result == 'success' || needs.build-ubuntu-hub.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
         targetPlatform: ${{ fromJson(needs.detect-unity-version.outputs.target_platforms) }}
     steps:
+      - name: Wait for base and hub images to be available on Docker Hub
+        if: ${{ github.event.inputs.build_base_images == 'true' }}
+        run: |
+          echo "⏳ Waiting for images to be available on Docker Hub..."
+          
+          BASE_IMAGE="jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}"
+          HUB_IMAGE="jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_full }}"
+          
+          # Function to check if image exists on Docker Hub
+          check_image_exists() {
+            local image=$1
+            local repo=$(echo $image | cut -d: -f1)
+            local tag=$(echo $image | cut -d: -f2)
+            
+            echo "🔍 Checking $image..."
+            
+            # Check Docker Hub API for the tag
+            local response=$(curl -s "https://hub.docker.com/v2/repositories/$repo/tags/$tag/")
+            if echo "$response" | grep -q '"name"'; then
+              echo "✅ $image is available"
+              return 0
+            else
+              echo "⏳ $image not yet available"
+              return 1
+            fi
+          }
+          
+          # Wait up to 10 minutes for both images
+          MAX_ATTEMPTS=60
+          SLEEP_TIME=10
+          
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "📊 Attempt $attempt/$MAX_ATTEMPTS ($(date))"
+            
+            BASE_READY=false
+            HUB_READY=false
+            
+            if check_image_exists "$BASE_IMAGE"; then
+              BASE_READY=true
+            fi
+            
+            if check_image_exists "$HUB_IMAGE"; then
+              HUB_READY=true
+            fi
+            
+            if [ "$BASE_READY" = true ] && [ "$HUB_READY" = true ]; then
+              echo "🎉 Both images are available on Docker Hub!"
+              break
+            fi
+            
+            if [ $attempt -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Timeout waiting for images to be available"
+              echo "Base image ready: $BASE_READY"
+              echo "Hub image ready: $HUB_READY"
+              exit 1
+            fi
+            
+            echo "⏳ Waiting ${SLEEP_TIME}s before next check..."
+            sleep $SLEEP_TIME
+          done
+
+      - name: Verify existing base and hub images are available
+        if: ${{ github.event.inputs.build_base_images != 'true' }}
+        run: |
+          echo "🔍 Verifying existing base and hub images are available..."
+          
+          BASE_IMAGE="jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}"
+          HUB_IMAGE="jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_full }}"
+          
+          # Quick check that existing images can be pulled
+          echo "🔍 Testing pull of $BASE_IMAGE..."
+          if ! docker pull "$BASE_IMAGE" >/dev/null 2>&1; then
+            echo "❌ Failed to pull $BASE_IMAGE"
+            echo "💡 You may need to build base images first (set build_base_images: true)"
+            exit 1
+          fi
+          
+          echo "🔍 Testing pull of $HUB_IMAGE..."  
+          if ! docker pull "$HUB_IMAGE" >/dev/null 2>&1; then
+            echo "❌ Failed to pull $HUB_IMAGE"
+            echo "💡 You may need to build base images first (set build_base_images: true)"
+            exit 1
+          fi
+          
+          echo "✅ Both base and hub images are available for use"
+
       - name: Trigger Ubuntu Editor Build for ${{ matrix.targetPlatform }}
         uses: peter-evans/repository-dispatch@v3
         with:
@@ -440,7 +526,7 @@ jobs:
   build-status:
     name: "📊 Build Status Summary"
     runs-on: ubuntu-latest
-    needs: [detect-unity-version, trigger-ubuntu-builds, trigger-windows-builds, trigger-windows-editor-builds]
+    needs: [detect-unity-version, build-ubuntu-base, build-ubuntu-hub, trigger-ubuntu-builds, trigger-windows-builds, trigger-windows-editor-builds]
     if: ${{ always() && needs.detect-unity-version.result == 'success' }}
     steps:
       - name: Generate Build Summary
@@ -459,9 +545,21 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ github.event.inputs.build_base_images }}" == "true" ]; then
-            echo "### Ubuntu Images" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Ubuntu Base Image Build" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Ubuntu Hub Image Build" >> $GITHUB_STEP_SUMMARY
+            echo "### Ubuntu Images Built" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.build-ubuntu-base.result }}" == "success" ]; then
+              echo "- ✅ Base Image: \`jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ❌ Base Image Build Failed" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [ "${{ needs.build-ubuntu-hub.result }}" == "success" ]; then
+              echo "- ✅ Hub Image: \`jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_full }}\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ❌ Hub Image Build Failed" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### Using Existing Images" >> $GITHUB_STEP_SUMMARY
+            echo "- 📋 Base Image: \`jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- 📋 Hub Image: \`jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_full }}\`" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "- ✅ Ubuntu Editor Builds (per platform)" >> $GITHUB_STEP_SUMMARY
