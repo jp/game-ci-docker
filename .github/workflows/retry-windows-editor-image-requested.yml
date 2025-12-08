@@ -32,6 +32,7 @@ jobs:
           echo "repoVersion (only major): ${{ github.event.client_payload.repoVersionMajor }}"
       - name: Report new build
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ github.event.client_payload.jobId }}
@@ -153,6 +154,7 @@ jobs:
       - name: Report publication
         if: ${{ success() }}
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ github.event.client_payload.jobId }}
@@ -173,6 +175,7 @@ jobs:
       - name: Report failure
         if: ${{ failure() || cancelled() }}
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ github.event.client_payload.jobId }}

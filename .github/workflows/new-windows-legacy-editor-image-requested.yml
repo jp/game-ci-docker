@@ -90,6 +90,7 @@ jobs:
 
       - name: Report new build
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ steps.buildParameters.outputs.jobId }}
@@ -214,6 +215,7 @@ jobs:
       - name: Report publication
         if: ${{ success() }}
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ steps.buildParameters.outputs.jobId }}
@@ -234,6 +236,7 @@ jobs:
       - name: Report failure
         if: ${{ failure() || cancelled() }}
         uses: ./.github/workflows/actions/report-to-backend
+        continue-on-error: true
         with:
           token: ${{ secrets.VERSIONING_TOKEN }}
           jobId: ${{ steps.buildParameters.outputs.jobId }}
