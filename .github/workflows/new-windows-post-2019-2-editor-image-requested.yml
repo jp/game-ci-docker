@@ -35,7 +35,7 @@ on:
 
 jobs:
   buildImage:
-    name: "🛠 Build unityci/editor (${{ matrix.targetPlatform }})"
+    name: "🛠 Build jpellet/gameci-editor (${{ matrix.targetPlatform }})"
     runs-on: windows-2022
     strategy:
       fail-fast: false

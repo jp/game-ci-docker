@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: "🛠 Build unityci/hub"
+    name: "🛠 Build jpellet/gameci-hub"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
             curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
           }
 
-          if docker_tag_exists unityci/hub ubuntu-${{ github.event.client_payload.repoVersionFull }} ; then
+          if docker_tag_exists jpellet/gameci-hub ubuntu-${{ github.event.client_payload.repoVersionFull }} ; then
             echo "Image already exists. Exiting."
             exit 1
           fi
@@ -71,7 +71,7 @@ jobs:
       #   Pull previous images   #
       ############################
       - name: Pull base image (must exist)
-        run: docker pull unityci/base:${{ github.event.client_payload.repoVersionFull }}
+        run: docker pull jpellet/gameci-base:${{ github.event.client_payload.repoVersionFull }}
       #################
       #   Hub image   #
       #################
@@ -80,22 +80,22 @@ jobs:
         id: build_ubuntu_hub_image
         with:
           file: ./images/ubuntu/hub/Dockerfile
-          build-args: baseImage=unityci/base:${{ github.event.client_payload.repoVersionFull }}
+          build-args: baseImage=jpellet/gameci-base:${{ github.event.client_payload.repoVersionFull }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
           push: true
           tags: |
-            unityci/hub:ubuntu-${{ github.event.client_payload.repoVersionFull }}
-            unityci/hub:${{ github.event.client_payload.repoVersionFull }}
-            unityci/hub:ubuntu-${{ github.event.client_payload.repoVersionMinor }}
-            unityci/hub:${{ github.event.client_payload.repoVersionMinor }}
-            unityci/hub:ubuntu-${{ github.event.client_payload.repoVersionMajor }}
-            unityci/hub:${{ github.event.client_payload.repoVersionMajor }}
-            unityci/hub:ubuntu-latest
-            unityci/hub:latest
+            jpellet/gameci-hub:ubuntu-${{ github.event.client_payload.repoVersionFull }}
+            jpellet/gameci-hub:${{ github.event.client_payload.repoVersionFull }}
+            jpellet/gameci-hub:ubuntu-${{ github.event.client_payload.repoVersionMinor }}
+            jpellet/gameci-hub:${{ github.event.client_payload.repoVersionMinor }}
+            jpellet/gameci-hub:ubuntu-${{ github.event.client_payload.repoVersionMajor }}
+            jpellet/gameci-hub:${{ github.event.client_payload.repoVersionMajor }}
+            jpellet/gameci-hub:ubuntu-latest
+            jpellet/gameci-hub:latest
       - name: Inspect
         run: |
-          docker buildx imagetools inspect unityci/hub:ubuntu-${{ github.event.client_payload.repoVersionFull }}
+          docker buildx imagetools inspect jpellet/gameci-hub:ubuntu-${{ github.event.client_payload.repoVersionFull }}
       - name: Image digest
         run: echo ${{ steps.build_ubuntu_hub_image.outputs.digest }}
       #################

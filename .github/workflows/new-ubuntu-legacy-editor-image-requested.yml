@@ -12,7 +12,7 @@ on:
 
 jobs:
   buildImage:
-    name: "🛠 Build unityci/editor (${{ matrix.targetPlatform }})"
+    name: "🛠 Build jpellet/gameci-editor (${{ matrix.targetPlatform }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

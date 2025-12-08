@@ -1,4 +1,4 @@
-ARG baseImage="unityci/base"
+ARG baseImage="jpellet/gameci-base"
 FROM $baseImage
 ARG hubVersion="3.7.0"
 

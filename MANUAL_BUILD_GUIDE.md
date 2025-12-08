@@ -62,7 +62,7 @@ gh auth login
 - `webgl` - WebGL build support
 
 ### Build Options
-- **Build base images**: Creates new `unityci/base` and `unityci/hub` images
+- **Build base images**: Creates new `jpellet/gameci-base` and `jpellet/gameci-hub` images
 - **Unity version**: Auto-detects latest 6000.3 LTS if not specified
 - **Repository version**: Auto-generated timestamp if not specified
 
@@ -72,13 +72,13 @@ The system creates Docker images with these naming patterns:
 
 ```
 # Base images (if enabled)
-unityci/base:ubuntu-2024.12.05.1430
-unityci/hub:ubuntu-2024.12.05.1430
+jpellet/gameci-base:ubuntu-2024.12.05.1430
+jpellet/gameci-hub:ubuntu-2024.12.05.1430
 
 # Editor images (per platform)
-unityci/editor:6000.0.23f1-base-2024.12.05.1430
-unityci/editor:6000.0.23f1-android-2024.12.05.1430
-unityci/editor:6000.0.23f1-webgl-2024.12.05.1430
+jpellet/gameci-editor:6000.0.23f1-base-2024.12.05.1430
+jpellet/gameci-editor:6000.0.23f1-android-2024.12.05.1430
+jpellet/gameci-editor:6000.0.23f1-webgl-2024.12.05.1430
 # ... etc for each platform
 ```
 
@@ -101,7 +101,7 @@ unityci/editor:6000.0.23f1-webgl-2024.12.05.1430
 
 **"Unity version X not found in unity-ci"**
 - The version lacks Unity CI base images
-- Check: https://hub.docker.com/r/unityci/editor/tags
+- Check: https://hub.docker.com/r/jpellet/gameci-editor/tags
 - Try a different Unity version
 
 **"Not authenticated with GitHub CLI"**

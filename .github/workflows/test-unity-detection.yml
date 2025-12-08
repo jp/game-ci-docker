@@ -91,7 +91,7 @@ jobs:
           echo ""
           echo "🔍 Checking Unity CI availability for $LATEST_VERSION..."
           
-          DOCKER_RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=25&page=1&ordering=last_updated&name=${LATEST_VERSION}")
+          DOCKER_RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/jpellet/gameci-editor/tags?page_size=25&page=1&ordering=last_updated&name=${LATEST_VERSION}")
           echo "📊 Docker Hub API response sample:"
           echo "$DOCKER_RESPONSE" | head -200
           echo ""
@@ -104,7 +104,7 @@ jobs:
             echo "✅ Unity CI images are available!"
           else
             echo "⚠️ No Unity CI images found for this version"
-            echo "Check: https://hub.docker.com/r/unityci/editor/tags?name=${LATEST_VERSION}"
+            echo "Check: https://hub.docker.com/r/jpellet/gameci-editor/tags?name=${LATEST_VERSION}"
           fi
           
           # Generate test repo version

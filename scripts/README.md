@@ -157,7 +157,7 @@ Editor Image Builds (Parallel)
 ## Troubleshooting
 
 ### "Unity version X not found in unity-ci"
-The Unity version doesn't have pre-built Unity CI base images. Check [Unity CI Docker Hub](https://hub.docker.com/r/unityci/editor/tags) for available versions.
+The Unity version doesn't have pre-built Unity CI base images. Check [Unity CI Docker Hub](https://hub.docker.com/r/jpellet/gameci-editor/tags) for available versions.
 
 ### "GitHub CLI (gh) is not installed"
 Install GitHub CLI to enable command-line workflow triggering:

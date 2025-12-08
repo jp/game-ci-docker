@@ -1,5 +1,5 @@
-ARG baseImage="unityci/base:windows-latest"
-ARG hubImage="unityci/hub:windows-latest"
+ARG baseImage="jpellet/gameci-base:windows-latest"
+ARG hubImage="jpellet/gameci-hub:windows-latest"
 
 #############
 #  Builder  #

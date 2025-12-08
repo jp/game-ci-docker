@@ -28,7 +28,7 @@ on:
 
 jobs:
   build:
-    name: "🛠 Build unityci/base"
+    name: "🛠 Build jpellet/gameci-base"
     runs-on: windows-2022
     steps:
       - name: Checkout

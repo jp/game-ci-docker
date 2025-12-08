@@ -9,7 +9,7 @@ Dockerised windows-based Unity Editor made for continuous integration.
 Run the editor image using an interactive shell
 
 ```bash
-docker run -it --rm unityci/editor:[tag]
+docker run -it --rm jpellet/gameci-editor:[tag]
 ```
 
 ## License

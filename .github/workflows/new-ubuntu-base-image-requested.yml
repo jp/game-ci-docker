@@ -19,7 +19,7 @@ on:
 
 jobs:
   build:
-    name: "🛠 Build unityci/base"
+    name: "🛠 Build jpellet/gameci-base"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -61,7 +61,7 @@ jobs:
             curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
           }
 
-          if docker_tag_exists unityci/base ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }} ; then
+          if docker_tag_exists jpellet/gameci-base ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }} ; then
             echo "Image already exists. Exiting."
             exit 1
           fi
@@ -85,15 +85,15 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache
           push: true
           tags: |
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
-            unityci/base:${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
-            unityci/base:${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
-            unityci/base:ubuntu-${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
-            unityci/base:${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
+            jpellet/gameci-base:ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
+            jpellet/gameci-base:${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
+            jpellet/gameci-base:ubuntu-${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
+            jpellet/gameci-base:${{ github.event.client_payload.repoVersionMinor || github.event.inputs.repo_version }}
+            jpellet/gameci-base:ubuntu-${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
+            jpellet/gameci-base:${{ github.event.client_payload.repoVersionMajor || github.event.inputs.repo_version }}
       - name: Inspect
         run: |
-          docker buildx imagetools inspect unityci/base:ubuntu-${{ github.event.client_payload.repoVersionFull }}
+          docker buildx imagetools inspect jpellet/gameci-base:ubuntu-${{ github.event.client_payload.repoVersionFull || github.event.inputs.repo_version }}
       - name: Image digest
         run: echo ${{ steps.build_ubuntu_base_image.outputs.digest }}
       #################

@@ -270,7 +270,7 @@ jobs:
             curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
           }
           
-          if docker_tag_exists unityci/base ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
+          if docker_tag_exists jpellet/gameci-base ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
             echo "⚠️ Base image already exists, skipping build"
             exit 0
           fi
@@ -282,12 +282,12 @@ jobs:
           file: ./images/ubuntu/base/Dockerfile
           push: true
           tags: |
-            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/base:${{ needs.detect-unity-version.outputs.repo_version_major }}
+            jpellet/gameci-base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            jpellet/gameci-base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            jpellet/gameci-base:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_major }}
 
   build-ubuntu-hub:
     name: "🛠 Build Ubuntu Hub"
@@ -325,7 +325,7 @@ jobs:
             curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 > /dev/null
           }
           
-          if docker_tag_exists unityci/hub ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
+          if docker_tag_exists jpellet/gameci-hub ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }} ; then
             echo "⚠️ Hub image already exists, skipping build"
             exit 0
           fi
@@ -336,15 +336,15 @@ jobs:
           context: ./images/ubuntu/hub
           file: ./images/ubuntu/hub/Dockerfile
           build-args: |
-            baseImage=unityci/base:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            baseImage=jpellet/gameci-base:${{ needs.detect-unity-version.outputs.repo_version_full }}
           push: true
           tags: |
-            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
-            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_minor }}
-            unityci/hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
-            unityci/hub:${{ needs.detect-unity-version.outputs.repo_version_major }}
+            jpellet/gameci-hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_full }}
+            jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_full }}
+            jpellet/gameci-hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_minor }}
+            jpellet/gameci-hub:ubuntu-${{ needs.detect-unity-version.outputs.repo_version_major }}
+            jpellet/gameci-hub:${{ needs.detect-unity-version.outputs.repo_version_major }}
 
   trigger-ubuntu-builds:
     name: "🚀 Trigger Ubuntu Builds"

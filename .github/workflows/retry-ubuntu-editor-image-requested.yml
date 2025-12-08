@@ -12,7 +12,7 @@ on:
 
 jobs:
   buildImage:
-    name: "🛠 Retry unityci/editor (${{ github.event.client_payload.targetPlatform }})"
+    name: "🛠 Retry jpellet/gameci-editor (${{ github.event.client_payload.targetPlatform }})"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

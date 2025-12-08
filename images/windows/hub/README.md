@@ -9,7 +9,7 @@ Dockerised windows-based Unity Hub made for continuous integration.
 Run the hub image using an interactive shell
 
 ```
-docker run -it --rm unityci/hub
+docker run -it --rm jpellet/gameci-hub
 ```
 
 

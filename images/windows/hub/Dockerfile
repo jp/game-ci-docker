@@ -1,4 +1,4 @@
-ARG baseImage="unityci/base:windows-latest"
+ARG baseImage="jpellet/gameci-base:windows-latest"
 
 FROM $baseImage
 
