@@ -35,13 +35,14 @@ on:
 
 jobs:
   buildImage:
-    name: "🛠 Build unityci/editor (${{ matrix.targetPlatform }})"
+    name: "🛠 Build jpellet/gameci-editor (${{ matrix.targetPlatform }})"
     runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
         targetPlatform:
           - base
+          - windows-mono
           - windows-il2cpp
           - universal-windows-platform
           - appletv
@@ -132,7 +133,7 @@ jobs:
             return $?
           }
 
-          if( (Docker-Tag-Exists -Repository unityci/editor -Tag windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}) ) {
+          if( (Docker-Tag-Exists -Repository jpellet/gameci-editor -Tag windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}) ) {
             echo "Image already exists. Exiting."
             exit 1
           }
@@ -146,10 +147,10 @@ jobs:
       #   Pull previous images   #
       ############################
       - name: Pull windows base image (must exist)
-        run: docker pull unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+        run: docker pull jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       - name: Pull windows hub image (must exist)
-        run: docker pull unityci/hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+        run: docker pull jpellet/gameci-hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       ############################
       #   Windows Editor image   #
@@ -159,21 +160,21 @@ jobs:
         continue-on-error: true
         run: |
           docker build ./images/windows/editor/ `
-            --build-arg hubImage=unityci/hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
-            --build-arg baseImage=unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --build-arg hubImage=jpellet/gameci-hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --build-arg baseImage=jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
             --build-arg version=${{ steps.buildParameters.outputs.editorVersion }} `
             --build-arg changeSet=${{ steps.buildParameters.outputs.changeSet }} `
             --build-arg module=${{ matrix.targetPlatform }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }} `
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }} `
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
 
           ### Warning: If we once publish latest, we will have to do it forever. Lets not do that unless it's needed ###
           ### Another warning: order is important: We go from specific to unspecific with the exception of the most specific tag which is used to check if the image is already there ###
 
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }}
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }}
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       #######################
       #   Retry the above   #
@@ -183,34 +184,34 @@ jobs:
         id: build_windows_editor_image_retry
         run: |
           docker build ./images/windows/editor/ `
-            --build-arg hubImage=unityci/hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
-            --build-arg baseImage=unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --build-arg hubImage=jpellet/gameci-hub:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --build-arg baseImage=jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
             --build-arg version=${{ steps.buildParameters.outputs.editorVersion }} `
             --build-arg changeSet=${{ steps.buildParameters.outputs.changeSet }} `
             --build-arg module=${{ matrix.targetPlatform }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }} `
-            --tag unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }} `
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }} `
+            --tag jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
 
           ### Warning: If we once publish latest, we will have to do it forever. Lets not do that unless it's needed ###
           ### Another warning: order is important: We go from specific to unspecific with the exception of the most specific tag which is used to check if the image is already there ###
 
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }}
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }}
-          docker push unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMinor }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionMajor }}
+          docker push jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       ###########################
       #   Inspect publication   #
       ###########################
       - name: Inspect
         run: |
-          docker inspect unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker inspect jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       - name: Image digest
         id: image-digest
         if: ${{ success() }}
         run: |
-          $MetaData = docker inspect unityci/editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
+          $MetaData = docker inspect jpellet/gameci-editor:windows-${{ steps.buildParameters.outputs.editorVersion }}-${{ matrix.targetPlatform }}-${{ steps.buildParameters.outputs.repoVersionFull }}
           $ImageDetails = $MetaData | ConvertFrom-Json
           $Digest = $ImageDetails.Config.Image
           echo "digest=$Digest" >> $Env:GITHUB_OUTPUT
@@ -234,8 +235,8 @@ jobs:
           editorVersion: ${{ steps.buildParameters.outputs.editorVersion }}
           targetPlatform: ${{ matrix.targetPlatform }}
           # Publication info
-          imageRepo: unityci
-          imageName: editor
+          imageRepo: jpellet
+          imageName: gameci-editor
           friendlyTag: windows-${{ steps.buildParameters.outputs.repoVersionMinor }}
           specificTag: windows-${{ steps.buildParameters.outputs.repoVersionFull }}
           digest: ${{ steps.image-digest.outputs.digest }}

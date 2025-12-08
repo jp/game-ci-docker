@@ -28,7 +28,7 @@ on:
 
 jobs:
   build:
-    name: "🛠 Build unityci/base"
+    name: "🛠 Build jpellet/gameci-base"
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -106,7 +106,7 @@ jobs:
             return $?
           }
 
-          if (Docker-Tag-Exists -Repository "unityci/base" -Tag "windows-${{ steps.buildParameters.outputs.repoVersionFull }}") {
+          if (Docker-Tag-Exists -Repository "jpellet/gameci-base" -Tag "windows-${{ steps.buildParameters.outputs.repoVersionFull }}") {
             echo "Image already exists. Exiting."
             exit 1
           }
@@ -120,17 +120,17 @@ jobs:
         id: build_windows_base_image
         run: |
           docker build ./images/windows/base/ `
-            --tag unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
-            --tag unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }} `
-            --tag unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }} `
-            --tag unityci/base:windows-latest
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }} `
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }} `
+            --tag jpellet/gameci-base:windows-latest
 
-          docker push unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
-          docker push unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }}
-          docker push unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }}
-          docker push unityci/base:windows-latest
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }}
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }}
+          docker push jpellet/gameci-base:windows-latest
 
-          $MetaData = docker inspect unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+          $MetaData = docker inspect jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
           $ImageDetails = $MetaData | ConvertFrom-Json
           $Digest = $ImageDetails.Config.Image
           echo "digest=$Digest" >> $Env:GITHUB_OUTPUT
@@ -138,7 +138,7 @@ jobs:
 
       - name: Inspect
         run: |
-          docker inspect unityci/base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker inspect jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
 
       - name: Image digest
         run: echo ${{ steps.build_windows_base_image.outputs.digest }}
