@@ -71,4 +71,62 @@ jobs:
           echo "repoVersion (full): ${{ steps.buildParameters.outputs.repoVersionFull }}"
           echo "repoVersion (only minor and major): ${{ steps.buildParameters.outputs.repoVersionMinor }}"
           echo "repoVersion (only major): ${{ steps.buildParameters.outputs.repoVersionMajor }}"
+      
+      #############
+      #   Setup   #
+      #############
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Check if image does not already exist
+        run: |
+          # Source: https://gist.github.com/webbertakken/1789a4683a99e2a62b975ff436a85382
+          function Docker-Tag-Exists {
+            [CmdletBinding()]
+            param([string] $Repository, [string] $Tag)
+
+            Try {
+              Invoke-RestMethod "https://index.docker.io/v1/repositories/$Repository/tags/$Tag"
+            } Catch {} # Assume image does not exist on erroneous response
+
+            return $?
+          }
+
+          if (Docker-Tag-Exists -Repository "jpellet/gameci-base" -Tag "windows-${{ steps.buildParameters.outputs.repoVersionFull }}") {
+            echo "Image already exists. Exiting."
+            exit 1
+          }
+
+      #################
+      #   Base image   #
+      #################
+      - name: Build and Publish Windows Base Image
+        id: build_windows_base_image
+        run: |
+          docker build ./images/windows/base/ `
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }} `
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }} `
+            --tag jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }} `
+            --tag jpellet/gameci-base:windows-latest
+
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMinor }}
+          docker push jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionMajor }}
+          docker push jpellet/gameci-base:windows-latest
+
+          $MetaData = docker inspect jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+          $ImageDetails = $MetaData | ConvertFrom-Json
+          $Digest = $ImageDetails.Config.Image
+          echo "digest=$Digest" >> $Env:GITHUB_OUTPUT
+          echo "metadata=$MetaData" >> $Env:GITHUB_OUTPUT
+
+      - name: Inspect
+        run: |
+          docker inspect jpellet/gameci-base:windows-${{ steps.buildParameters.outputs.repoVersionFull }}
+
+      - name: Image digest
+        run: echo ${{ steps.build_windows_base_image.outputs.digest }}
 

@@ -42,6 +42,7 @@ jobs:
       matrix:
         targetPlatform:
           - base
+          - windows-mono
           - windows-il2cpp
           - universal-windows-platform
           - appletv
